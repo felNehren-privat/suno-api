@@ -4,6 +4,7 @@ import pino from 'pino';
 import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 import { sleep } from "@/lib/utils";
+import OpenAI from 'openai';
 
 const logger = pino();
 export const DEFAULT_MODEL = "chirp-v3-5";
@@ -19,13 +20,22 @@ export interface AudioInfo {
   created_at: string; // Date and time when the audio was created
   model_name: string; // Name of the model used for audio generation
   gpt_description_prompt?: string; // Prompt for GPT description
-  prompt?: string; // Prompt for audio generation 
+  prompt?: string; // Prompt for audio generation
   status: string; // Status
   type?: string;
   tags?: string; // Genre of music.
   duration?: string; // Duration of the audio
   error_message?: string; // Error message if any
 }
+
+interface ChatGPTParams {
+  custom: string;
+  multiselect: string[];
+  htmlContent: string;
+  vocals: boolean;
+  title: string;
+}
+
 
 class SunoApi {
   private static BASE_URL: string = 'https://studio-api.suno.ai';
@@ -65,7 +75,7 @@ class SunoApi {
    */
   private async getAuthToken() {
     // URL to get session ID
-    const getSessionUrl = `${SunoApi.CLERK_BASE_URL}/v1/client?_clerk_js_version=4.73.4`; 
+    const getSessionUrl = `${SunoApi.CLERK_BASE_URL}/v1/client?_clerk_js_version=4.73.3`;
     // Get session ID
     const sessionResponse = await this.client.get(getSessionUrl);
     if (!sessionResponse?.data?.response?.['last_active_session_id']) {
@@ -84,7 +94,7 @@ class SunoApi {
       throw new Error("Session ID is not set. Cannot renew token.");
     }
     // URL to renew session token
-    const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?_clerk_js_version==4.73.4`; 
+    const renewUrl = `${SunoApi.CLERK_BASE_URL}/v1/client/sessions/${this.sid}/tokens?_clerk_js_version==4.73.3`;
     // Renew session token
     const renewResponse = await this.client.post(renewUrl);
     logger.info("KeepAlive...\n");
@@ -197,7 +207,7 @@ class SunoApi {
     if (isCustom) {
       payload.tags = tags;
       payload.title = title;
-      payload.prompt = prompt;
+      payload.prompt = make_instrumental == false ? prompt : '';
     } else {
       payload.gpt_description_prompt = prompt;
     }
@@ -286,6 +296,63 @@ class SunoApi {
     return lyricsResponse.data;
   }
 
+/**
+ * Interacts with ChatGPT using the given prompt.
+ * @param params ChatGPT params, including custom, multiselect, htmlContent, and vocals.
+ * @returns audio url.
+ */
+public async chatGPT(params: ChatGPTParams): Promise<string> {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  // Destructure the params object to extract the values
+  const { custom, multiselect, htmlContent, vocals } = params;
+
+  // Construct the custom prompt using the htmlContent
+
+  let customPrompt = ''
+  if (vocals) {
+    customPrompt = `I want you to write a beautiful song about the text. Use emotions, describe the mood and setting. Fit the content of the song thematically to the context. Dont focus on single characters but on the topics. Write about 150 words: ${htmlContent}`;
+  }
+  else {
+    customPrompt = `I want you to summarize the content of the text. Use emotions, describe the mood and focus on the setting using adjectives. Write about 150 words: ${htmlContent}`;
+  }
+
+  // Interact with ChatGPT using the constructed prompt
+  const summaryResponse = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'user', content: customPrompt }
+    ],
+    max_tokens: 1000,
+  });
+
+  const summaryText = summaryResponse.choices[0].message.content
+
+  const tagPrompt = `ONLY ANSWER WITH THE TAGS, NOTHING ELSE. I want you to create a list of fitting single word tags separated by a comma. It will be used to generate a song. Generate about 10 thematic tags, genre, themes, feelings based on the custom tags and the summary. Only use tags concerning vocals if vocals is true, else use instrumental tags. Focus on musical tags that fit the setting. Use at least one genre tag and one setting tag. Vocals: ${vocals}, Custom Tags: ${multiselect}, ${custom} Summary: ${summaryText}`;
+
+  const tagResponse = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'user', content: tagPrompt }
+    ],
+    max_tokens: 1000,
+  });
+
+  let tags = tagResponse.choices[0].message.content
+  tags = tags ? tags.slice(0, 115) : tags
+
+  const response = {
+    prompt: summaryText,
+    tags
+  }
+
+  // Extract the generated content from the response
+  return JSON.stringify(response) as string;
+}
+
+
   /**
    * Extends an existing audio clip by generating additional content based on the provided prompt.
    * 
@@ -367,7 +434,7 @@ class SunoApi {
       prompt: audio.metadata.prompt,
       type: audio.metadata.type,
       tags: audio.metadata.tags,
-      duration: audio.metadata.duration,  
+      duration: audio.metadata.duration,
       error_message: audio.metadata.error_message,
     }));
   }
