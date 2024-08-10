@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { headers } from "next/headers";
 import { sunoApi } from '@/lib/SunoApi';
 import { corsHeaders } from "@/lib/utils";
 import fs from 'fs';
@@ -31,6 +32,14 @@ interface ChatGPTParams {
 }
 
 export const POST = async (req: NextRequest, res: NextResponse) => {
+  // Extract the token
+  const request_token = headers().get('auth_token');
+  const env_token = process.env.request_token;
+
+  if (request_token != env_token) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  
   try {
     // Parse JSON body
     const params: ChatGPTParams = await req.json();
