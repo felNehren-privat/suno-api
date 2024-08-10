@@ -33,7 +33,7 @@ interface ChatGPTParams {
 
 export const POST = async (req: NextRequest, res: NextResponse) => {
   // Extract the token
-  const request_token = headers().get('auth_token');
+  const request_token = headers().get('auth-token');
   const env_token = process.env.request_token;
 
   if (request_token != env_token) {
