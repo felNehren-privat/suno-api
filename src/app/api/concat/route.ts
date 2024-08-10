@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { checkAuthToken, unauthorizedResponse } from '@/lib/tokenHelpers';
 import { sunoApi } from "@/lib/SunoApi";
 import { corsHeaders } from "@/lib/utils";
 
@@ -6,6 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   if (req.method === 'POST') {
+
+    if (!checkAuthToken(req)) {
+      return unauthorizedResponse();
+    }
+
     try {
       const body = await req.json();
       const { clip_id } = body;

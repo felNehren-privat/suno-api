@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { checkAuthToken, unauthorizedResponse } from '@/lib/tokenHelpers';
 import { sunoApi } from "@/lib/SunoApi";
 import { corsHeaders } from "@/lib/utils";
 
@@ -6,6 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (req.method === 'GET') {
+
+    if (!checkAuthToken(req)) {
+      return unauthorizedResponse();
+    }
+
     try {
       const url = new URL(req.url);
       const songIds = url.searchParams.get('ids');

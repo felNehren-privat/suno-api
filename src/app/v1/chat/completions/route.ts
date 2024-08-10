@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { checkAuthToken, unauthorizedResponse } from '@/lib/tokenHelpers';
 import { DEFAULT_MODEL, sunoApi } from "@/lib/SunoApi";
 import { corsHeaders } from "@/lib/utils";
 
@@ -10,6 +11,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
+
+    if (!checkAuthToken(req)) {
+      return unauthorizedResponse();
+    }
 
     const body = await req.json();
 

@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { checkAuthToken, unauthorizedResponse } from '@/lib/tokenHelpers';
 import { headers } from "next/headers";
 import { sunoApi } from '@/lib/SunoApi';
 import { corsHeaders } from "@/lib/utils";
@@ -28,11 +29,8 @@ interface ChatGPTParams {
 }
 
 export const POST = async (req: NextRequest, res: NextResponse) => {
-  const requestToken = headers().get('auth-token');
-  const envToken = process.env.REQUEST_TOKEN;
-
-  if (requestToken !== envToken) {
-    return new NextResponse('Unauthorized', { status: 401 });
+  if (!checkAuthToken(req)) {
+    return unauthorizedResponse();
   }
 
   try {
