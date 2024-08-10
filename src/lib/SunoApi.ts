@@ -302,53 +302,43 @@ class SunoApi {
  * @returns audio url.
  */
 public async chatGPT(params: ChatGPTParams): Promise<string> {
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
-  // Destructure the params object to extract the values
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const { custom, multiselect, htmlContent, vocals } = params;
 
-  // Construct the custom prompt using the htmlContent
+  const isDebugMode = process.env.DEBUG_MODE === 'true';
 
-  let customPrompt = ''
-  if (vocals) {
-    customPrompt = `I want you to write a beautiful song about the text. Use emotions, describe the mood and setting. Fit the content of the song thematically to the context. Dont focus on single characters but on the topics. Write about 150 words: ${htmlContent}`;
-  }
-  else {
-    customPrompt = `I want you to summarize the content of the text. Use emotions, describe the mood and focus on the setting using adjectives. Write about 150 words: ${htmlContent}`;
-  }
+  const customPrompt = vocals 
+  ? `I want you to write a beautiful song about the text. Use emotions, describe the mood and setting. Fit the content of the song thematically to the context. Don't focus on single characters but on the topics. Write about 150 words: ${htmlContent}`
+  : `I want you to summarize the content of the text. Use emotions, describe the mood and focus on the setting using adjectives. Write about 150 words: ${htmlContent}`;
 
-  // Interact with ChatGPT using the constructed prompt
   const summaryResponse = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    messages: [
-      { role: 'user', content: customPrompt }
-    ],
+    messages: [{ role: 'user', content: customPrompt }],
     max_tokens: 1000,
   });
 
-  const summaryText = summaryResponse.choices[0].message.content
-
-  const tagPrompt = `ONLY ANSWER WITH THE TAGS, NOTHING ELSE. I want you to create a list of fitting single word tags separated by a comma. It will be used to generate a song. Generate about 10 thematic tags, genre, themes, feelings based on the custom tags and the summary. Only use tags concerning vocals if vocals is true, else use instrumental tags. Focus on musical tags that fit the setting. Use at least one genre tag and one setting tag. Vocals: ${vocals}, Custom Tags: ${multiselect}, ${custom} Summary: ${summaryText}`;
+  const summaryText = summaryResponse.choices[0].message.content;
+  const tagPrompt = `ONLY ANSWER WITH THE TAGS, NOTHING ELSE. I want you to create a list of fitting single word tags separated by a comma. It will be used to generate a song. Generate about 10 thematic tags, genre, themes, feelings based on the custom tags and the summary. Only use tags concerning vocals if vocals is true, else use instrumental tags. Focus on musical tags that fit the setting. Use at least one genre tag and one setting tag. Vocals: ${vocals}, Custom Tags: ${multiselect}, ${custom}, Summary: ${summaryText}`;
 
   const tagResponse = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    messages: [
-      { role: 'user', content: tagPrompt }
-    ],
+    messages: [{ role: 'user', content: tagPrompt }],
     max_tokens: 1000,
   });
 
   let tags = tagResponse.choices[0].message.content
   tags = tags ? tags.slice(0, 115) : tags
 
-  const response = {
-    prompt: summaryText,
-    tags
+  const response = { prompt: summaryText, tags };
+
+  if (isDebugMode) {
+    console.debug('Custom Prompt:', customPrompt);
+    console.debug('Summary Response:', summaryResponse);
+    console.debug('Tag Prompt:', tagPrompt);
+    console.debug('Tag Response:', tagResponse);
+    console.debug('Response:', response);
   }
 
-  // Extract the generated content from the response
   return JSON.stringify(response) as string;
 }
 

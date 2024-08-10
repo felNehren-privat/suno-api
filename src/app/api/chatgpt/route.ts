@@ -5,24 +5,20 @@ import { corsHeaders } from "@/lib/utils";
 import fs from 'fs';
 import path from 'path';
 
-// Ensure the logs directory exists
 const logDirectory = path.join(process.cwd(), 'logs');
+const logFilePath = path.join(logDirectory, 'suno.log');
+const isDebugMode = process.env.DEBUG_MODE === 'true';
+
 if (!fs.existsSync(logDirectory)) {
   fs.mkdirSync(logDirectory);
 }
 
-// Define the log file path
-const logFilePath = path.join(logDirectory, 'suno.log');
-
-// Function to log data with a timestamp
 function logResponse(data: any) {
   const timestamp = new Date().toISOString();
   const logEntry = `${timestamp} - ${data}\n`;
-
   fs.appendFileSync(logFilePath, logEntry, 'utf8');
 }
 
-// Define the type for the parameters
 interface ChatGPTParams {
   custom: string;
   multiselect: string[];
@@ -32,36 +28,27 @@ interface ChatGPTParams {
 }
 
 export const POST = async (req: NextRequest, res: NextResponse) => {
-  // Extract the token
-  const request_token = headers().get('auth-token');
-  const env_token = process.env.request_token;
+  const requestToken = headers().get('auth-token');
+  const envToken = process.env.REQUEST_TOKEN;
 
-  if (request_token != env_token) {
+  if (requestToken !== envToken) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
-  
+
   try {
-    // Parse JSON body
     const params: ChatGPTParams = await req.json();
+    const suno = await sunoApi;
 
-    // Call chatGPT with the correctly typed params
-    const stringGPTResponse = await (await sunoApi).chatGPT(params);
-    const chatGPTResponse = JSON.parse(stringGPTResponse);
-
-    let trimmedTitle = params.title;
-    trimmedTitle = trimmedTitle.slice(0, 60);
-
+    const chatGPTResponse = JSON.parse(await suno.chatGPT(params));
     const audioParams = {
-      title: params.title,
+      title: params.title.slice(0, 60),
       prompt: chatGPTResponse.prompt,
       tags: chatGPTResponse.tags,
-      make_instrumental: Boolean(!params.vocals),
+      make_instrumental: !params.vocals,
       wait_audio: true
     };
 
-    console.log(audioParams);
-
-    const audioInfo = await (await sunoApi).custom_generate(
+    const audioInfo = await suno.custom_generate(
       audioParams.prompt,
       audioParams.tags,
       audioParams.title,
@@ -70,7 +57,12 @@ export const POST = async (req: NextRequest, res: NextResponse) => {
       audioParams.wait_audio
     );
 
-    // Log the responses
+    if (isDebugMode) {
+      console.debug('chatGPTResponse:', chatGPTResponse);
+      console.debug('audioParams:', audioParams);
+      console.debug('audioInfo:', audioInfo);
+    }
+
     logResponse(`chatGPTResponse: ${JSON.stringify(chatGPTResponse)}`);
     logResponse(`audioInfo: ${JSON.stringify(audioInfo)}`);
 
